@@ -1,0 +1,591 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sofia – Habit Tracker</title>
+<style>
+:root{
+  --bg:#939292dd;           /* sfondo pagina */
+  --card:#fafafaf1;         /* card leggermente grigina */
+  --ink:#f9f9f9;          /* testo scuro */
+  --muted:#555a66;        /* testo attenuato */
+  --accent:#3b6cff;       /* blu acceso bottoni */
+  --radius:16px;
+  --shadow:0 4px 12px rgba(0,0,0,.08);
+  --habit-col-width:360px;
+
+  --cell-size:28px;
+  --dot-off-h:220;
+  --dot-off-s:8%;
+  --dot-off-l:88%;
+  --dot-off-bg:hsl(var(--dot-off-h),var(--dot-off-s),var(--dot-off-l));
+  --dot-off-border:rgba(0,0,0,.12);
+
+  --dot-on-s:96%;
+  --dot-on-l:55%;
+
+  --cell-radius:9px;
+  --cell-radius-circle:999px;
+}
+
+/* Base */
+*{box-sizing:border-box}
+html,body{height:100%;width:100%}
+body{
+  margin:0; background:linear-gradient(180deg,#0e1014,#0a0c10); color:var(--ink);
+  font:500 15px/1.4 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica Neue,Arial;
+}
+.wrap{max-width:100%;margin:24px auto 80px;padding:0 16px}
+
+/* Header */
+header{position:sticky;top:0;z-index:10;backdrop-filter:saturate(140%) blur(10px);
+  background:rgba(15,17,21,.6);border-bottom:1px solid rgba(255,255,255,.06)}
+header .bar{padding:12px 16px;display:flex;gap:12px;align-items:center}
+h1{font-size:18px;margin:0 8px 0 0;letter-spacing:.3px}
+
+/* Card */
+.card{background:linear-gradient(180deg,#171b25,#131722);border:1px solid rgba(255,255,255,.06);
+  border-radius:var(--radius);box-shadow:var(--shadow)}
+
+/* Controls */
+.controls{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:14px}
+.controls .field{display:flex;flex-direction:column}
+.controls label{color:var(--muted);font-size:12px;margin-bottom:6px}
+input[type="text"],input[type="url"],input[type="month"],input[type="color"]{
+  background:#0f131c;color:var(--ink);border:1px solid rgba(255,255,255,.08);
+  border-radius:10px;padding:10px 12px;min-width:180px;outline:none
+}
+input[type="color"]{padding:0;height:40px;width:60px}
+
+/* Buttons — glow + bounce */
+.btn{
+  cursor:pointer;border:0;border-radius:12px;padding:10px 14px;color:#0b0e14;font-weight:700;
+  background:linear-gradient(180deg,#9fe3ff,#7c8cff);
+  box-shadow:0 4px 14px rgba(124,140,255,.35);
+  transition:transform .18s cubic-bezier(.2,.9,.2,1), box-shadow .18s;
+}
+.btn.secondary{background:#202635;color:var(--ink);box-shadow:none;border:1px solid rgba(255,255,255,.08)}
+.btn.danger{background:linear-gradient(180deg,#ffb4b4,#ff7c7c);color:#0b0e14}
+.btn[disabled]{opacity:.55;cursor:not-allowed;filter:saturate(.6)}
+@keyframes btn-bounce{0%{transform:scale(1)}60%{transform:scale(1.06)}100%{transform:scale(1.03)}}
+.btn:hover{animation:btn-bounce .22s ease-out both; box-shadow:0 8px 22px rgba(124,140,255,.5)}
+.btn.secondary:hover{box-shadow:0 8px 22px rgba(0,0,0,.45)}
+.btn.danger:hover{box-shadow:0 8px 22px rgba(255,124,124,.45)}
+.btn:active{transform:scale(.98)}
+
+/* Month */
+.month-stack{display:flex;flex-direction:column;min-width:220px}
+#month-label{font-size:13px;color:var(--muted);margin-top:4px}
+.month-big{font-size:14px;font-weight:700;color:var(--ink);margin-top:2px}
+
+/* GRID */
+.grid-wrap{
+  border-top:1px solid rgba(255,255,255,.06);
+  overflow:auto;          /* scroll verticale interno */
+  max-height:70vh;        /* fallback; JS la adatta */
+}
+table{width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed}
+col.habit-col{width:var(--habit-col-width)}
+thead th{
+  position:sticky; top:0; z-index:5;
+  font-weight:700;color:var(--muted);
+  background:linear-gradient(180deg,#151a24,#121622);
+  border-bottom:1px solid rgba(255,255,255,.08);
+  box-shadow:0 2px 0 rgba(0,0,0,.18);
+}
+tbody th{
+  position:sticky; left:0; z-index:4;
+  background:linear-gradient(180deg,#151a24,#121622);
+  border-right:1px solid rgba(255,255,255,.08)
+}
+th,td{padding:9px} /* 18px totali */
+
+/* Habit col */
+thead th.habit-col,tbody th.habit-col{
+  text-align:left;min-width:var(--habit-col-width);max-width:var(--habit-col-width);
+  overflow:visible;white-space:normal
+}
+
+/* Habit cell */
+.habit{display:flex;align-items:center;gap:12px}
+.avatar{
+  width:40px;height:40px;border-radius:999px;flex:0 0 auto;display:grid;place-items:center;
+  overflow:hidden;border:2px solid #5fb4ff;box-shadow:0 0 0 2px rgba(95,180,255,.15),0 6px 14px rgba(0,0,0,.35);
+  font-size:20px;line-height:1;text-align:center; /* emoji centrate */
+}
+.avatar img{width:100%;height:100%;object-fit:cover}
+.habit .meta{display:flex;flex-direction:column;gap:2px}
+.habit .name{font-weight:700;line-height:1.25}
+
+/* Drag handle + row states */
+.drag-line{display:flex;align-items:center;gap:10px}
+.drag-handle{cursor:grab; user-select:none; font-weight:700; color:var(--muted)}
+.drag-handle:active{ cursor:grabbing }
+.habit-row.dragging{ opacity:.6 }
+
+/* Dots — grigi off, più grandi on */
+.dot{
+  width:var(--cell-size);
+  height:var(--cell-size);
+  display:block;
+  cursor:pointer;
+  border-radius:var(--cell-radius-circle);
+  background: var(--dot-off-bg);
+  border:1px solid var(--dot-off-border);
+  transition:transform .18s cubic-bezier(.2,.9,.2,1),
+             border-radius .18s, box-shadow .18s, background .18s, opacity .18s;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 1px 2px rgba(0,0,0,.25);
+  opacity:.92;
+  margin:4px auto;
+}
+.dot:hover{ transform:translateY(-1px) scale(1.03) }
+.dot.checked{
+  background: hsl(var(--hue), var(--dot-on-s), var(--dot-on-l));
+  border-radius: var(--cell-radius);
+  transform: scale(1.06);
+  box-shadow: 0 8px 18px rgba(0,0,0,.35), inset 0 -8px 14px rgba(0,0,0,.25);
+  animation: bounce .24s ease-out;
+}
+
+@keyframes bounce{0%{transform:scale(.86)}60%{transform:scale(1.04)}100%{transform:scale(1)}}
+.day-label{font-variant-numeric:tabular-nums;font-weight:700;opacity:.85}
+.empty{color:var(--muted);text-align:center;padding:24px}
+.footer-note{color:var(--muted);font-size:12px;margin-top:10px;padding:12px 16px 16px}
+
+/* Dropdown & Modals */
+.dropdown{ position:relative }
+.menu{
+  position:absolute;top:100%;right:0;min-width:280px;margin-top:8px;
+  background:linear-gradient(180deg,#171b25,#131722);
+  border:1px solid rgba(255,255,255,.08);border-radius:12px;box-shadow:var(--shadow);
+  display:none; z-index:30;
+}
+.menu.open{display:block}
+.menu .item{padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:8px}
+.menu .item:hover{background:#202635}
+.menu .empty{padding:12px;color:var(--muted)}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:50}
+.modal-backdrop.open{display:flex}
+.modal{width:min(520px,92vw);background:linear-gradient(180deg,#171b25,#131722);
+  border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:var(--shadow);padding:16px}
+.modal h3{margin:0 0 10px 0}
+.modal .row{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}
+.modal .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+.modal input[type="text"],.modal input[type="url"],.modal input[type="color"]{flex:1}
+
+/* Toolbar */
+.toolbar{display:flex;gap:8px;align-items:center}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <h1>Habit Tracker</h1>
+    <div style="flex:1"></div>
+    <div class="month-stack">
+      <label for="month" style="color:var(--muted);font-size:12px">Mese</label>
+      <input id="month" type="month"/>
+      <div id="month-label" class="month-big"></div>
+    </div>
+    <button id="create-month" class="btn">Crea mese</button>
+    <button id="prev-month" class="btn secondary" title="Mese precedente">◀</button>
+    <button id="next-month" class="btn secondary" title="Mese successivo">▶</button>
+    <button id="clear-month" class="btn danger" title="Elimina i segni del mese">Elimina mese</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <div class="controls">
+      <div class="field">
+        <label>Nome abitudine</label>
+        <input id="habit-name" type="text" placeholder="Es. Drink water"/>
+      </div>
+      <div class="field">
+        <label>Emoji / Immagine (opzionale)</label>
+        <input id="habit-icon" type="text" placeholder="🍎 oppure https://…"/>
+      </div>
+      <div class="field">
+        <label>Colore sfondo icona</label>
+        <input id="habit-color" type="color" value="#b7c0ff"/>
+      </div>
+
+      <div class="toolbar">
+        <button id="add-habit" class="btn">+ Aggiungi abitudine</button>
+
+        <div class="dropdown">
+          <button id="btn-edit" class="btn">Modifica abitudine</button>
+          <div id="menu-edit" class="menu"></div>
+        </div>
+        <div class="dropdown">
+          <button id="btn-del" class="btn danger">Elimina abitudine</button>
+          <div id="menu-del" class="menu"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="grid" class="grid-wrap">
+      <div class="empty">Aggiungi almeno un’abitudine per iniziare ✨</div>
+    </div>
+
+    <div class="footer-note">
+      Dati solo se li crei tu. Registro mesi: <code>months.v1</code>. Se un mese non esiste, vedi “👀 ops…”.
+    </div>
+  </div>
+</div>
+
+<!-- Modals -->
+<div id="modal-edit" class="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3>Modifica abitudine</h3>
+    <div class="row"><input id="edit-name" type="text" placeholder="Nome"/></div>
+    <div class="row">
+      <input id="edit-icon" type="text" placeholder="🍎 oppure https://…"/>
+      <input id="edit-color" type="color" />
+    </div>
+    <div class="actions">
+      <button class="btn secondary" data-close>Annulla</button>
+      <button id="save-edit" class="btn">Salva</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-confirm" class="modal-backdrop" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3 id="confirm-title">Confermi?</h3>
+    <p id="confirm-text" style="margin:6px 0 12px 0;color:var(--muted)"></p>
+    <div class="actions">
+      <button class="btn secondary" data-close>No</button>
+      <button id="confirm-yes" class="btn danger">Sì, elimina</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = s => document.querySelector(s);
+
+  const grid = $('#grid');
+  const monthInput = $('#month');
+  const monthLabel = $('#month-label');
+  const createMonthBtn = $('#create-month');
+  const addBtn = $('#add-habit');
+  const clearBtn = $('#clear-month');
+  const prevBtn = $('#prev-month');
+  const nextBtn = $('#next-month');
+  const btnEdit = $('#btn-edit'), menuEdit = $('#menu-edit');
+  const btnDel  = $('#btn-del'),  menuDel  = $('#menu-del');
+
+  const modalEdit = $('#modal-edit'), modalConfirm = $('#modal-confirm');
+  const editName = $('#edit-name'), editIcon = $('#edit-icon'), editColor = $('#edit-color');
+  const saveEdit = $('#save-edit'), confirmYes = $('#confirm-yes');
+  const confirmTitle = $('#confirm-title'), confirmText = $('#confirm-text');
+
+  const now = new Date();
+  const pad2 = n => String(n).padStart(2,'0');
+  monthInput.value = `${now.getFullYear()}-${pad2(now.getMonth()+1)}`;
+  const monthsIt = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+  const formatMonthIt = ym => { const [Y,M]=ym.split('-').map(Number); return `${monthsIt[M-1]} ${Y}`; };
+
+  /* LocalStorage helpers */
+  const LS = {
+    keyHabits: ym => `habits.v3.${ym}`,     // v3: usa 'icon'
+    keyMarks:  ym => `marks.v1.${ym}`,
+    keyMonths: 'months.v1',
+    getHabits(ym){ return JSON.parse(localStorage.getItem(this.keyHabits(ym))||'[]'); },
+    setHabits(ym, list){ localStorage.setItem(this.keyHabits(ym), JSON.stringify(list)); },
+    getMarks(ym){ return JSON.parse(localStorage.getItem(this.keyMarks(ym))||'{}'); },
+    setMarks(ym, obj){ localStorage.setItem(this.keyMarks(ym), JSON.stringify(obj)); },
+    getMonths(){ return JSON.parse(localStorage.getItem(this.keyMonths)||'[]'); },
+    setMonths(arr){ localStorage.setItem(this.keyMonths, JSON.stringify(arr)); },
+    hasMonth(ym){ return this.getMonths().includes(ym); },
+    addMonth(ym){ const s=new Set(this.getMonths()); s.add(ym); this.setMonths([...s]); }
+  };
+
+  /* State */
+  let habits = [];
+  let editingId = null, pendingDeleteId = null;
+
+  const daysInMonth = (y,m0)=>new Date(y,m0+1,0).getDate();
+  const ym = ()=> monthInput.value;
+  const parseYM = x=>{const [Y,M]=x.split('-').map(Number);return {Y,M};};
+  const addMonths = (x,delta)=>{const {Y,M}=parseYM(x);const d=new Date(Y,M-1+delta,1);return `${d.getFullYear()}-${pad2(d.getMonth()+1)}`};
+  const hueForDay=(day,total)=>{const s=[270,240,200,140,60,30,0,320],n=s.length-1;if(total===1)return s[0];
+    const t=(day-1)/(total-1),i=Math.min(Math.floor(t*n),n-1),lt=t*n-i,h1=s[i],h2=s[i+1],d=((h2-h1+540)%360)-180;return Math.round((h1+d*lt+360)%360)};
+
+  /* Autosize — evita taglio ultimo giorno; consente celle più grandi */
+  function autosizeCells(totalDays){
+    const wrapW = grid.clientWidth;
+    const habitW = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--habit-col-width'))||360;
+    const colW   = (wrapW - habitW) / totalDays;
+    let size = Math.floor(colW - 18 /*padding td*/ - 2 /*bordi dot*/);
+    size = Math.max(16, Math.min(size, 52));   // max più alto, ma senza sbordare
+    document.documentElement.style.setProperty('--cell-size', size+'px');
+  }
+
+  /* NEW: calcola altezza disponibile per la griglia (sticky thead efficace) */
+  function adjustGridViewport(){
+    const rect = grid.getBoundingClientRect();
+    const available = Math.max(200, Math.floor(window.innerHeight - rect.top - 16));
+    grid.style.maxHeight = available + 'px';
+    grid.style.overflow = 'auto';
+  }
+
+  function buildMenus(){
+    const list = habits;
+    function renderMenu(container, emptyText){
+      if(!list.length){ container.innerHTML = `<div class="empty">${emptyText}</div>`; return; }
+      container.innerHTML = list.map(h=>`<div class="item" data-id="${h.id}">
+          <div class="avatar" style="width:20px;height:20px;border-width:1px;background:${h.color||'#b7c0ff'}"></div>
+          <span>${h.name}</span></div>`).join('');
+    }
+    const exists = LS.hasMonth(ym());
+    renderMenu(menuEdit, exists ? 'Nessuna abitudine da modificare' : 'Crea il mese per gestire abitudini');
+    renderMenu(menuDel,  exists ? 'Nessuna abitudine da eliminare'  : 'Crea il mese per gestire abitudini');
+  }
+
+  function closeMenus(){ menuEdit.classList.remove('open'); menuDel.classList.remove('open'); }
+  function toggleMenu(menu){ menu.classList.toggle('open'); if(menu===menuEdit){menuDel.classList.remove('open');}else{menuEdit.classList.remove('open');} }
+  function openModal(modal){ modal.classList.add('open'); }
+  function disableIfNoMonth(){
+    const exists = LS.hasMonth(ym());
+    btnEdit.disabled = btnDel.disabled = !exists;
+  }
+
+  /* ---- Drag & Drop helpers ---- */
+  function enableRowDnD(tbody){
+    const rows = Array.from(tbody.querySelectorAll('tr.habit-row'));
+    rows.forEach(row=>{
+      const handle = row.querySelector('.drag-handle');
+      row.dataset.dragok = '0';
+      handle.addEventListener('mousedown', ()=>{ row.dataset.dragok = '1'; });
+      row.addEventListener('dragstart', (e)=>{
+        if(row.dataset.dragok !== '1'){ e.preventDefault(); return; }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', row.dataset.id);
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', ()=>{
+        row.classList.remove('dragging');
+        row.dataset.dragok = '0';
+      });
+    });
+
+    tbody.addEventListener('dragover', (e)=>{
+      e.preventDefault();
+      const after = getDragAfterElement(tbody, e.clientY);
+      const dragging = tbody.querySelector('tr.habit-row.dragging');
+      if(!dragging) return;
+      if(after == null){ tbody.appendChild(dragging); }
+      else{ tbody.insertBefore(dragging, after); }
+    });
+
+    tbody.addEventListener('drop', ()=>{
+      const ymStr = ym();
+      const idToHabit = new Map(habits.map(h=>[h.id, h]));
+      const newOrder = Array.from(tbody.querySelectorAll('tr.habit-row')).map(tr=>idToHabit.get(tr.dataset.id)).filter(Boolean);
+      habits = newOrder;
+      LS.setHabits(ymStr, habits);
+      buildMenus();
+    });
+  }
+  function getDragAfterElement(container, y){
+    const els = [...container.querySelectorAll('tr.habit-row:not(.dragging)')];
+    let closest = {offset: Number.NEGATIVE_INFINITY, element: null};
+    for(const el of els){
+      const box = el.getBoundingClientRect();
+      const offset = y - (box.top + box.height/2);
+      if(offset < 0 && offset > closest.offset){ closest = {offset, element: el}; }
+    }
+    return closest.element;
+  }
+
+  /* Render */
+  function render(){
+    const ymStr = ym();
+    monthLabel.textContent = formatMonthIt(ymStr);
+
+    const {Y,M} = parseYM(ymStr);
+    const totalDays = daysInMonth(Y,M-1);
+
+    if(!LS.hasMonth(ymStr)){
+      grid.innerHTML = `<div class="empty">👀 ops... sembra che questo mese non esista ancora</div>`;
+      habits = [];
+      autosizeCells(totalDays);
+      adjustGridViewport();
+      buildMenus();
+      disableIfNoMonth();
+      return;
+    }
+
+    habits = LS.getHabits(ymStr);
+    const marks  = LS.getMarks(ymStr);
+
+    if(!habits.length){
+      grid.innerHTML = '<div class="empty">Aggiungi almeno un\'abitudine per iniziare ✨</div>';
+      autosizeCells(totalDays);
+      adjustGridViewport();
+      buildMenus();
+      disableIfNoMonth();
+      return;
+    }
+
+    const thead =
+      `<colgroup><col class="habit-col" />${Array.from({length: totalDays}, ()=>'<col />').join('')}</colgroup>`+
+      `<thead><tr><th class="habit-col">Abitudine</th>${Array.from({length: totalDays},(_,i)=>`<th><span class="day-label">${i+1}</span></th>`).join('')}</tr></thead>`;
+
+    const rows = habits.map(h=>{
+      const avatar = h.icon
+        ? (String(h.icon).startsWith('http')
+            ? `<div class="avatar" style="background:${h.color||'#b7c0ff'}"><img src="${h.icon}" alt=""/></div>`
+            : `<div class="avatar" style="background:${h.color||'#b7c0ff'}">${h.icon}</div>`)
+        : `<div class="avatar" style="background:${h.color||'#b7c0ff'}"></div>`;
+
+      const rowId = h.id;
+      const cells = Array.from({length: totalDays},(_,i)=>{
+        const day=i+1,key=`${rowId}:${day}`,on=!!marks[key],hue=hueForDay(day,totalDays);
+        return `<td><div class="dot ${on?'checked':''}" data-key="${key}" style="--hue:${hue}"></div></td>`;
+      }).join('');
+
+      const title = `<div class="drag-line"><span class="drag-handle" title="Trascina per riordinare">⋮⋮</span><span class="name">${h.name}</span></div>`;
+
+      return `<tr class="habit-row" data-id="${rowId}" draggable="true">`+
+             `<th class="habit-col"><div class="habit">${avatar}<div class="meta">${title}</div></div></th>`+
+             cells+
+             `</tr>`;
+    }).join('');
+
+    grid.innerHTML = `<table>${thead}<tbody>${rows}</tbody></table>`;
+
+    autosizeCells(totalDays);
+    adjustGridViewport();
+
+    grid.querySelectorAll('.dot').forEach(el=>{
+      el.addEventListener('click', ()=>{
+        const k = el.dataset.key;
+        const marks = LS.getMarks(ymStr);
+        const on = !!marks[k];
+        marks[k] = !on; LS.setMarks(ymStr,marks);
+        el.classList.toggle('checked',!on);
+      });
+    });
+
+    enableRowDnD(grid.querySelector('tbody'));
+    buildMenus();
+    disableIfNoMonth();
+  }
+
+  /* Create month */
+  createMonthBtn.addEventListener('click', ()=>{
+    const ymStr = ym();
+    if(LS.hasMonth(ymStr)) { alert('Questo mese esiste già.'); return; }
+    LS.addMonth(ymStr);
+    LS.setHabits(ymStr, []);
+    render();
+  });
+
+  /* Add habit */
+  addBtn.addEventListener('click',()=>{
+    const ymStr = ym();
+    const name = $('#habit-name').value.trim();
+    if(!name){ alert('Dammi un nome ✍️'); return; }
+    if(!LS.hasMonth(ymStr)) LS.addMonth(ymStr);
+    let list = LS.getHabits(ymStr);
+
+    const icon = $('#habit-icon').value.trim();      // emoji o URL
+    const color = $('#habit-color').value || '#cccccc';
+    const id = Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+    list.push({id,name,icon,color});
+    LS.setHabits(ymStr,list);
+
+    $('#habit-name').value=''; $('#habit-icon').value='';
+    render();
+  });
+
+  /* Month nav */
+  const nudgeMonth = (delta)=>{ monthInput.value = addMonths(ym(),delta); closeMenus(); render(); };
+  monthInput.addEventListener('change',()=>{ closeMenus(); render(); });
+  prevBtn.addEventListener('click',()=>nudgeMonth(-1));
+  nextBtn.addEventListener('click',()=>nudgeMonth(+1));
+
+  /* Clear month marks */
+  clearBtn.addEventListener('click',()=>{
+    const ymStr = ym(); if(!LS.hasMonth(ymStr)) return;
+    const {Y,M}=parseYM(ymStr); const label = `${monthsIt[M-1]} ${Y}`;
+    if(confirm(`Eliminare TUTTI i segni per ${label}?`)){ localStorage.removeItem(LS.keyMarks(ymStr)); render(); }
+  });
+
+  /* Dropdowns */
+  function closeMenus(){ menuEdit.classList.remove('open'); menuDel.classList.remove('open'); }
+  function toggleMenu(menu){ menu.classList.toggle('open'); if(menu===menuEdit){menuDel.classList.remove('open');}else{menuEdit.classList.remove('open');} }
+
+  btnEdit.addEventListener('click',()=>{
+    if(btnEdit.disabled) return;
+    buildMenus(); toggleMenu(menuEdit);
+  });
+  btnDel.addEventListener('click',()=>{
+    if(btnDel.disabled) return;
+    buildMenus(); toggleMenu(menuDel);
+  });
+  document.addEventListener('click',(e)=>{ if(e.target.closest('.dropdown')) return; closeMenus(); });
+
+  /* Menu item click */
+  menuEdit.addEventListener('click',(e)=>{
+    const item = e.target.closest('.item'); if(!item) return;
+    const ymStr = ym();
+    const id = item.dataset.id; const h = habits.find(x=>x.id===id); if(!h) return;
+    editingId = id;
+    editName.value = h.name; editIcon.value = h.icon||''; editColor.value = h.color||'#b7c0ff';
+    closeMenus(); openModal(modalEdit);
+
+    saveEdit.onclick = ()=>{
+      let list = LS.getHabits(ymStr);
+      const i = list.findIndex(x=>x.id===editingId); if(i<0) return;
+      list[i] = {...list[i],
+        name:  editName.value.trim() || list[i].name,
+        icon:  editIcon.value.trim(),
+        color: editColor.value
+      };
+      LS.setHabits(ymStr,list);
+      modalEdit.classList.remove('open'); render();
+    };
+  });
+
+  menuDel.addEventListener('click',(e)=>{
+    const item = e.target.closest('.item'); if(!item) return;
+    const ymStr = ym();
+    const id = item.dataset.id; const h = habits.find(x=>x.id===id); if(!h) return;
+    pendingDeleteId = id;
+    confirmTitle.textContent = 'Elimina abitudine';
+    confirmText.textContent  = `Vuoi eliminare “${h.name}” solo per ${formatMonthIt(ymStr)}? I segni del mese verranno rimossi.`;
+    closeMenus(); modalConfirm.classList.add('open');
+
+    confirmYes.onclick = ()=>{
+      let list = LS.getHabits(ymStr).filter(x=>x.id!==pendingDeleteId);
+      LS.setHabits(ymStr,list);
+      const marks = LS.getMarks(ymStr);
+      Object.keys(marks).forEach(k=>{ if(k.startsWith(pendingDeleteId+':')) delete marks[k]; });
+      LS.setMarks(ymStr,marks);
+      pendingDeleteId = null; modalConfirm.classList.remove('open'); render();
+    };
+  });
+
+  /* Modals close */
+  modalEdit.addEventListener('click',(e)=>{ if(e.target.dataset.close!==undefined || e.target===modalEdit) modalEdit.classList.remove('open'); });
+  modalConfirm.addEventListener('click',(e)=>{ if(e.target.dataset.close!==undefined || e.target===modalConfirm) modalConfirm.classList.remove('open'); });
+
+  /* Resize / viewport adjust */
+  window.addEventListener('resize', ()=>{
+    const {Y,M}=parseYM(ym());
+    autosizeCells(daysInMonth(Y,M-1));
+    adjustGridViewport();
+  });
+
+  /* First paint */
+  (function init(){ monthLabel.textContent = formatMonthIt(ym()); render(); })();
+})();
+</script>
+</body>
+</html>
